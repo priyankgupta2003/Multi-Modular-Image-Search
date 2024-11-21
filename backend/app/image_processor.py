@@ -17,11 +17,11 @@ class ImageProcessor:
         self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         self.blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
         self.blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
-        self.db_util = DatabaseUtilities("image_search")
-        self.collection = self.db_util.connect_image_search_collection()
+        self.db_util = DatabaseUtilities()
+        #self.collection = self.db_util.connect_image_search_collection()
         # Create separate collections for image and text embeddings
-        self.image_collection = self.db_util.connect_collection("image_embeddings")
-        self.text_collection = self.db_util.connect_collection("text_embeddings")
+        self.image_collection = self.db_util.connect_collection("image_collection")
+        self.text_collection = self.db_util.connect_collection("text_collection")
 
     async def process_image_url(self, url: str) -> str:
         """
@@ -158,39 +158,6 @@ class ImageProcessor:
     
     def get_image_by_id(self, image_id: str):
         return self.db_util.get_image_by_id(image_id)
-    
-    # Add new method for searching with either or both embeddings
-    def search_images(self, query_image: Image = None, query_text: str = None, limit: int = 5):
-        """
-        Search for images using image and/or text queries
-        Returns merged results based on available query types
-        """
-        results = []
-        
-        if query_image:
-            image_embeddings, _ = self._preprocess_image(query_image, None)
-            image_results = self.image_collection.query(
-                query_embeddings=[image_embeddings],
-                n_results=limit
-            )
-            results.extend(image_results['ids'][0])
-            
-        if query_text:
-            _, text_embeddings = self._preprocess_image(None, query_text)
-            text_results = self.text_collection.query(
-                query_embeddings=[text_embeddings],
-                n_results=limit
-            )
-            results.extend(text_results['ids'][0])
-        
-        # Remove duplicates while preserving order
-        unique_results = list(dict.fromkeys(results))
-        
-        # Get full metadata for unique results
-        return self.image_collection.get(
-            ids=unique_results[:limit],
-            include=['metadatas', 'documents']
-        )
     
   
     

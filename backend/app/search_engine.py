@@ -13,8 +13,8 @@ class SearchEngine:
         self.db_util = DatabaseUtilities()
         self.s3_util = S3Utilities()
         # Initialize collections
-        self.image_collection = self.db_util.connect_collection("image_embeddings")
-        self.text_collection = self.db_util.connect_collection("text_embeddings")
+        self.image_collection = self.db_util.connect_collection("image_collection")
+        self.text_collection = self.db_util.connect_collection("text_collection")
 
     async def get_all_images(self):
         """Retrieve all images from the collection"""
@@ -60,22 +60,30 @@ class SearchEngine:
             _, text_embeddings = image_processor._preprocess_image(None, query)
             
             # Search in text collection
-            search_results = self.text_collection.query(
+            text_results = self.text_collection.query(
                 query_embeddings=[text_embeddings],
                 n_results=100,
-                include=['metadatas', 'documents', 'distances']
+                include=['distances']
             )
             
             # Filter and format results
             results = []
-            if search_results['ids']:
-                for i in range(len(search_results['ids'][0])):
-                    similarity_score = 1 - float(search_results['distances'][0][i])
+            if text_results['ids']:
+                matching_ids = text_results['ids'][0]
+                
+                image_details = self.image_collection.get(
+                    ids = matching_ids,
+                    include=['metadatas']
+                    )
+                
+                for i in range(len(matching_ids)):
+                    similarity_score = 1 - float(text_results['distances'][0][i])
                     if similarity_score >= 0.5:
+                        image_metadata = image_details['metadatas'][i] if image_details['metadatas'] else {}
                         results.append({
-                            'id': search_results['ids'][0][i],
-                            'metadata': search_results['metadatas'][0][i],
-                            's3_url': search_results['metadatas'][0][i].get('path'),
+                            'id': matching_ids[i],
+                            'metadata': image_metadata,
+                            's3_url': image_metadata.get('path'),
                             'similarity_score': round(similarity_score * 100, 2)
                         })
             
@@ -108,7 +116,7 @@ class SearchEngine:
             search_image = Image.open(BytesIO(response.content))
             
             # Get image embeddings
-            image_embeddings, _ = image_processor._preprocess_image(search_image, None)
+            image_embeddings = image_processor._preprocess_image(search_image, None)
             
             # Search in image collection
             search_results = self.image_collection.query(
