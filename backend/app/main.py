@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from image_processor import ImageProcessor
@@ -26,7 +26,10 @@ async def add_image(image_url: str):
         image_id = await image_processor.process_image_url(image_url)
         return {"status": "success", "image_id": image_id}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to process image: {str(e)}"
+        )
 
 @app.post("/images/search/text")
 async def search_by_text(query: str):

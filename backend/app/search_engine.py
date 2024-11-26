@@ -53,56 +53,44 @@ class SearchEngine:
             print(f"Error retrieving images: {str(e)}")
 
     async def text_search(self, query: str) -> Dict:
-        """Search images using natural language text"""
         try:
             # Get text embeddings
             image_processor = ImageProcessor()
             _, text_embeddings = image_processor._preprocess_image(None, query)
-            
+
             # Search in text collection
             text_results = self.text_collection.query(
                 query_embeddings=[text_embeddings],
                 n_results=100,
                 include=['distances']
             )
-            
+
             # Filter and format results
             results = []
             if text_results['ids']:
                 matching_ids = text_results['ids'][0]
-                
                 image_details = self.image_collection.get(
-                    ids = matching_ids,
+                    ids=matching_ids,
                     include=['metadatas']
-                    )
-                
+                )
+
                 for i in range(len(matching_ids)):
                     similarity_score = 1 - float(text_results['distances'][0][i])
-                    if similarity_score >= 0.5:
+                    if similarity_score >= 0.5:  # Threshold for similarity
                         image_metadata = image_details['metadatas'][i] if image_details['metadatas'] else {}
-                        results.append({
-                            'id': matching_ids[i],
-                            'metadata': image_metadata,
-                            's3_url': image_metadata.get('path'),
-                            'similarity_score': round(similarity_score * 100, 2)
-                        })
-            
+                        if image_metadata and 'path' in image_metadata:
+                            results.append({
+                                's3_url': image_metadata['path'],
+                                'similarity_score': round(similarity_score * 100, 2)
+                            })
+
+            # Sort results by similarity score
             results.sort(key=lambda x: x['similarity_score'], reverse=True)
-            
-            return {
-                'status': 'success',
-                'results': results,
-                'total_results': len(results)
-            }
-            
+            return results
+
         except Exception as e:
             print(f"Error in text search: {str(e)}")
-            return {
-                'status': 'error',
-                'message': str(e),
-                'results': [],
-                'total_results': 0
-            }
+            return []
 
     async def url_search(self, image_url: str) -> Dict:
         """Search for similar images using an image URL"""
